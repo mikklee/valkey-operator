@@ -30,7 +30,8 @@ func SetVolumePermissions() {
 		fmt.Println("Failed to convert group to int: ", err)
 		os.Exit(1)
 	}
-	if err := os.Chown(dir, uid, gid); err != nil {
+	// The values in the command are resolved from the pods local environment, not direct user input.
+	if err := os.Chown(dir, uid, gid); err != nil { // #nosec G703
 		fmt.Println("Failed to chown data dir: ", err)
 		os.Exit(1)
 	}

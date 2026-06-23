@@ -719,8 +719,17 @@ func (r *ValkeyReconciler) getClusterNodes(ctx context.Context, valkey *hyperv1.
 		}
 	}
 
+	useHostname := resolveEndpointType(valkey) == "hostname"
 	for _, node := range nodes {
-		vc, err := r.getClient(ctx, valkey, fmt.Sprintf("%s:%d", node.ip, ValkeyPort), true)
+		// In hostname mode dial the stable pod DNS rather than node.ip: the pod IP
+		// changes on every reschedule, leaving the operator dialing a dead address and
+		// wrongly marking the node disconnected. The headless DNS always resolves to
+		// the current IP. In ip mode keep dialing the pod IP.
+		dialTarget := node.ip
+		if useHostname {
+			dialTarget = fmt.Sprintf("%s.%s-headless.%s.svc", node.name, valkey.Name, valkey.Namespace)
+		}
+		vc, err := r.getClient(ctx, valkey, fmt.Sprintf("%s:%d", dialTarget, ValkeyPort), true)
 		if err != nil {
 			node.connected = false
 		}

@@ -280,6 +280,9 @@ func resolveEndpointType(valkey *hyperv1.Valkey) string {
 
 func labels(valkey *hyperv1.Valkey) map[string]string {
 	l := maps.Clone(valkey.Labels)
+	if l == nil {
+		l = map[string]string{}
+	}
 	l["app.kubernetes.io/name"] = Valkey
 	l["app.kubernetes.io/instance"] = valkey.Name
 	l["app.kubernetes.io/component"] = Valkey

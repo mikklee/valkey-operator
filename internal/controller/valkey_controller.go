@@ -659,6 +659,10 @@ func (r *ValkeyReconciler) initCluster(ctx context.Context, valkey *hyperv1.Valk
 					}
 				}
 			} else if node.primary != master.id {
+				if node.client == nil {
+					node.connected = false
+					continue
+				}
 				err = node.client.Do(ctx, node.client.B().ClusterReplicate().NodeId(master.id).Build()).Error()
 				if err != nil {
 					logger.Error(err, "failed to cluster replicate")

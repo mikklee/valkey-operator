@@ -2388,6 +2388,19 @@ func (r *ValkeyReconciler) upsertStatefulSet(ctx context.Context, valkey *hyperv
 	if valkey.Spec.Image != "" {
 		image = valkey.Spec.Image
 	}
+	// When clients are told to address nodes by hostname
+	// (cluster-preferred-endpoint-type=hostname), every node must also announce its
+	// own hostname. Passing it on the valkey-server command line (expanded from
+	// POD_NAME by the kubelet) makes it survive pod restarts. A runtime CONFIG SET
+	// is lost on reboot, which leaves CLUSTER SLOTS returning empty endpoints and
+	// clients failing with "?:6379" until the operator next reconciles.
+	var announceHostnameArgs []string
+	if endpointType == "hostname" {
+		announceHostnameArgs = []string{
+			"--cluster-announce-hostname",
+			fmt.Sprintf("$(POD_NAME).%s-headless.%s.svc.%s", valkey.Name, valkey.Namespace, valkey.Spec.ClusterDomain),
+		}
+	}
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      valkey.Name,
@@ -2461,11 +2474,11 @@ func (r *ValkeyReconciler) upsertStatefulSet(ctx context.Context, valkey *hyperv
 							},
 							Name:            Valkey,
 							ImagePullPolicy: "IfNotPresent",
-							Command: []string{
+							Command: append([]string{
 								"valkey-server",
 								"/valkey/etc/valkey.conf",
 								"--protected-mode", "no",
-							},
+							}, announceHostnameArgs...),
 							Env: []corev1.EnvVar{
 								{
 									Name: "POD_NAME",
@@ -2700,12 +2713,12 @@ func (r *ValkeyReconciler) upsertStatefulSet(ctx context.Context, valkey *hyperv
 				},
 			},
 		})
-		sts.Spec.Template.Spec.Containers[0].Command = []string{
+		sts.Spec.Template.Spec.Containers[0].Command = append([]string{
 			"valkey-server",
 			"/valkey/etc/valkey.conf",
 			"--requirepass", "$(VALKEY_PASSWORD)",
 			"--primaryauth", "$(VALKEY_PASSWORD)",
-		}
+		}, announceHostnameArgs...)
 	}
 	if valkey.Spec.ExternalAccess != nil && valkey.Spec.ExternalAccess.Enabled {
 		sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
